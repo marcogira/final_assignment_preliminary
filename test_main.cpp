@@ -1,30 +1,35 @@
-#include "Parking.h"
+#include <list>
+using std::list;
+#include <iterator>
 #include <iostream>
+using std::cout;
+using std::endl;
+#include <sstream>
+using std::istringstream;
 #include <fstream>
 using std::ifstream;
+#include <thread>
+using std::thread;
 
-using namespace std;
+#include "Parking.h"
+#include "Access.h"
+
+
 
 int main()
 {
-	//initialization of parkings objects. parking(int capacity, float daily_fee, float hourly fee)
-	Parking parking1(10,2,3); 
-	Parking parking2(5,2,4);
-
-	parking1.add_incoming_car("AB123CD",{2013,Date::oct,24,2,31});
-	parking2.add_incoming_car("BB123CD",{2014,Date::oct,24,2,31});
-	parking2.add_incoming_car("CB123CD",{2015,Date::oct,24,2,31});
-	parking1.add_incoming_car("DB123CD",{2016,Date::oct,24,2,31});
-	parking1.add_incoming_car("EB123CD",{2017,Date::oct,24,2,31});
-	parking1.add_incoming_car("FB123CD",{2018,Date::oct,24,2,31});
-	parking2.add_incoming_car("GB123CD",{2019,Date::oct,24,2,31});
-	parking1.add_incoming_car("HB123CD",{2020,Date::oct,24,2,31});
-	parking2.add_incoming_car("IB123CD",{2021,Date::oct,24,2,31});
-	parking1.remove_outcoming_car("AB123CD",{2013,Date::oct,24,2,31});
-	parking1.remove_outcoming_car("LB123CD",{2013,Date::oct,24,2,31});
-	parking1.remove_outcoming_car("AB123CD",{2013,Date::oct,24,2,31});
-	parking2.add_incoming_car("CB123FD",{2015,Date::oct,24,2,31});
-
-
+	Parking parking1(100,1,1);
+	//parking1.add_incoming_car( "park1_access.txt" );
+	thread parking1_access_manager ( [ &parking1 ]() { parking1.add_incoming_car( "park1_access.txt" ); } );
+	thread parking1_exit_manager ( [ &parking1 ]() { parking1.remove_outcoming_car( "park1_exit.txt" ); } );
+	
+	parking1_access_manager.join();
+	parking1_exit_manager.join();
+/*
+	cout << "\n\nHERE YOU HAVE CARS STILL PARKED:" << endl;
+	list <Access> parked_cars=parking1.get_parked_cars();
+	for( std::list<Access>::iterator it=parked_cars.begin() ; it != parked_cars.end() ; it++ ){ //slides along register of arked cars 
+		cout << "\n     " << it->get_licence_plate() << endl;
+	}*/
   return 0;
 }

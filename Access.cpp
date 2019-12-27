@@ -32,7 +32,6 @@ Date Access::get_access_time() const
 	return access_time;
 }
 
-
 // operators
 ostream& operator<<(ostream& os, const Access& access)
 {

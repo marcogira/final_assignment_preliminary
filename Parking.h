@@ -36,8 +36,8 @@ public:
 	list <Access> get_parked_cars() const;
 
 	// methods
-	void add_incoming_car(string file_path);
-	void remove_outcoming_car(string file_path);
+	void add_incoming_car(string file_path, int parkingID);
+	void remove_outcoming_car(string file_path, int parkingID);
 
 private:
 	int capacity;      // year
@@ -45,6 +45,8 @@ private:
 	float hourly_fee;
 	Date next_access_date{};
 	Date next_exit_date{};
+	bool access_reading_done{false};
+	bool exits_reading_done{false};
 	list <Access> parked_cars;
 	
 	std::mutex mux; //mutex used to protect parked_cars to be written simultaneously from add_incoming_car & from remove_outcoming_car

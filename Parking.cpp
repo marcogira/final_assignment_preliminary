@@ -71,7 +71,7 @@ list <Access> Parking::get_parked_cars() const{
 }
 
 //method to be run as thread in order to check if a new car has entered & register it
-void Parking::add_incoming_car(string file_path){
+void Parking::add_incoming_car(string file_path, int parkingID){
 	//read input file
 	ifstream infile;
    	infile.open(file_path); //input file path containing entering cars accesses
@@ -86,38 +86,39 @@ void Parking::add_incoming_car(string file_path){
   	string line;
    	while (getline(infile, line)){
     		istringstream iss(line);
-    		int read_year, read_month, read_day, read_hour, read_minute;
+    		int read_year, read_month, read_day, read_hour, read_minute; //datas to be read from file
     		string read_licence_plate;
     
-    		if (!(iss >> read_licence_plate >> read_year >> read_month >> read_day >> read_hour >> read_minute)) { break; } // error
-    		cout <<"read access "<< read_licence_plate <<" "<< read_year<<" "<<  read_month<<" "<<  read_day<<" "<<  read_hour<<" "<<  read_minute<<endl;
-    		Date new_access_date(read_year, read_month, read_day, read_hour, read_minute);
-    		next_access_date.set_date( new_access_date );
-    		Access new_access = Access(read_licence_plate, new_access_date); //create a new access object
+    		if (!(iss >> read_licence_plate >> read_year >> read_month >> read_day >> read_hour >> read_minute)) { break; } // check read line structure
+    		Date new_access_date(read_year, read_month, read_day, read_hour, read_minute); //create a new date with read datas
+    		next_access_date.set_date( new_access_date ); //updates next access operation date to be processed
+    		Access new_access = Access(read_licence_plate, new_access_date); //create a new Access local object before entering in CS
     		
-    		//when unlocked processes a new access
     		std::unique_lock<mutex> parked_cars_mutex(mux); //create a lock guard to avoid parked_cars change size/position of elements while adding the access
-    		if(compare_dates( next_access_date , next_exit_date) ){ //if next income time > next outcome_time
-    			cout<<"exits turn"<<endl; 
+    		if(compare_dates( next_access_date , next_exit_date) && !exits_reading_done){ //if next income time > next outcome_time new_exit must be processed before new_access
     			exit_turn.notify_one(); //notifies exits manager thread
-    			access_turn.wait(parked_cars_mutex); //waits for the other thread to process exit till next income time < next outcome_time 
+    			access_turn.wait(parked_cars_mutex); //waits for the other thread to process new_exit(s) till next income time < next outcome_time 
     		}
-	
+		//when unlocked processes a new access
 		if( static_cast <int> ( parked_cars.size() ) >= capacity ){ //if no room is available
 			parked_cars_mutex.unlock(); //exit from CS
-			cout << "\n\n\n\n       --- NO PARKINGS AVAILABLE, SORRY FOR THE INCONVENIENCE! --- " << new_access << endl; //print output
+			cout << "\n\n\n\nPARKING# " << parkingID << endl; 
+			cout << "\n\n       --- NO PARKINGS AVAILABLE, SORRY FOR THE INCONVENIENCE! --- " << new_access << endl; //print output
 		}
 		else{ //if there is room available
 			parked_cars.push_back(new_access); //add car to parked_cars
 			parked_cars_mutex.unlock(); //exit from CS
-			cout << "\n\n\n\n                --- HAVE A NICE JOURNEY! ---" << new_access << endl; //print output
+			cout << "\n\n\n\nPARKING# " << parkingID << endl; 
+			cout << "\n\n                --- HAVE A NICE JOURNEY! ---" << new_access << endl; //print output to the user
 		}
     	}
+    	access_reading_done = true; //set flag to true before signaling, to avoid deadlock of the other thread
+    	exit_turn.notify_one(); //notifies exits manager thread and let it finish its data processing
    	infile.close();//close input file
 }
 
 //method to be run as thread in order to check if a new car has gone & remove it
-void Parking::remove_outcoming_car(string file_path){
+void Parking::remove_outcoming_car(string file_path, int parkingID){
 	//read input file
 	ifstream infile;
    	infile.open(file_path); //input file path containing entering cars accesses
@@ -130,45 +131,43 @@ void Parking::remove_outcoming_car(string file_path){
 
   	string line;
    	while (getline(infile, line)){
-    		istringstream iss(line);
-    		int read_year, read_month, read_day, read_hour, read_minute;
+   		istringstream iss(line);
+    		int read_year, read_month, read_day, read_hour, read_minute;//datas to be read from file
     		string read_licence_plate;
     		
-    		if (!(iss >> read_licence_plate >> read_year >> read_month >> read_day >> read_hour >> read_minute)) { break; } // error
-    		
-    		cout <<"read exit "<< read_licence_plate <<" "<< read_year<<" "<<  read_month<<" "<<  read_day<<" "<<  read_hour<<" "<<  read_minute<<endl;
-    		Date new_exit_date( read_year, read_month, read_day, read_hour, read_minute );
-    		next_exit_date.set_date( new_exit_date );
-    		Access new_exit = Access(read_licence_plate , new_exit_date );
-    		
-    		//when unlocked remove car
+    		if (!(iss >> read_licence_plate >> read_year >> read_month >> read_day >> read_hour >> read_minute)) { break; } // check read line structure
+
+    		Date new_exit_date( read_year, read_month, read_day, read_hour, read_minute );//create a new date with read datas
+    		next_exit_date.set_date( new_exit_date );//updates next exit operation date to be processed
+    		Access new_exit = Access(read_licence_plate , new_exit_date );//create a new Access local object before entering in CS
+    		bool found{false}; //create a bool variable to send the correct output to user while not using CS
+    		    		 
     		std::unique_lock<mutex> parked_cars_mutex(mux); //create a new lock guard
-    		cout << "exit locked" <<endl;	
-    		if(!compare_dates( next_access_date , next_exit_date ) ){ //if next outcome time >= next income time (giving priority to exits manager thread if date1 == date2)
-    			cout<<"accesses turn"<<endl; 
+    		if(!compare_dates( next_access_date , next_exit_date ) && !access_reading_done){ //if next outcome time>=next income time (giving priority to exits thread if date1= date2). if the other thread already finished, does not stop anymore
     			access_turn.notify_one(); //notifies exits manager thread
-    			exit_turn.wait(parked_cars_mutex); //waits for the other thread to process access till next outcome time < next income time 
+    			exit_turn.wait(parked_cars_mutex); //waits for the other thread to process acces(s) till next outcome time < next income time 
     		}
     		
-    		bool found{false};
-    		std::list<Access>::iterator it=parked_cars.begin() ;
-    		
+    		std::list<Access>::iterator it=parked_cars.begin() ; //create an iterator used to look for the exiting licence plate 
 		do{
 			if( it->get_licence_plate() == read_licence_plate ){ //check if current car licence plate is the outcoming licence plate
 				parked_cars.erase(it); //if so, removes licence plate
-				found=true;
+				found=true; //set found flag to true so that the correct utput will be displayed once out of CS
 			}
-			it++;
-		} while(  it != parked_cars.end() && found==false ); //slides along register of parked cars till reaches its end or find car
+			it++; //if licence plate is not found, increments iterator
+		} while(  it != parked_cars.end() && found==false ); //slides along register of parked cars till reaches its end or finds exiting car
 		
-		parked_cars_mutex.unlock(); //if car is not found exit from CS & signal error to user
+		parked_cars_mutex.unlock(); //exit from CS, then print output
 		
+		cout << "\n\n\n\nPARKING# " << parkingID << endl; 
 		if(found) //if could not find licence plate throws an error to the user
-			cout << "\n\n\n\n            --- THANK YOU, AND SEE YOU AGAIN! ---" << new_exit << endl;
+			cout << "\n\n            --- THANK YOU, AND SEE YOU AGAIN! ---" << new_exit << endl;
 		else
-			cout << "\n\n\n\n  --- YOUR CAR SEEMS NOT TO BE CORRECTLY CHECKED-IN. --- \n           --- PLEASE CONTACT AN OPERATOR ---" << new_exit <<  endl;
+			cout << "\n\n  --- YOUR CAR SEEMS NOT TO BE CORRECTLY CHECKED-IN. --- \n           --- PLEASE CONTACT AN OPERATOR ---" << new_exit <<  endl;
     	}
-   	infile.close();//close input file
+    	exits_reading_done = true;//set flag to true before signaling, to avoid deadlock of the other thread
+    	access_turn.notify_one(); //notifies access manager thread and let it finish its data processing
+    	infile.close();//close input file
 }
 
 // operators

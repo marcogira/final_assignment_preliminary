@@ -19,12 +19,18 @@ using std::thread;
 int main()
 {
 	Parking parking1(100,1,1);
-	//parking1.add_incoming_car( "park1_access.txt" );
-	thread parking1_access_manager ( [ &parking1 ]() { parking1.add_incoming_car( "park1_access.txt" ); } );
-	thread parking1_exit_manager ( [ &parking1 ]() { parking1.remove_outcoming_car( "park1_exit.txt" ); } );
+	Parking parking2(50,1,1);
+	
+	thread parking1_access_manager ( [ &parking1 ]() { parking1.add_incoming_car( "park2_access.txt" , 1 ); } );
+	thread parking1_exit_manager ( [ &parking1 ]() { parking1.remove_outcoming_car( "park2_exits.txt" , 1 ); } );
+	
+	thread parking2_access_manager ( [ &parking2 ]() { parking2.add_incoming_car( "park1_access.txt" , 2 ); } );
+	thread parking2_exit_manager ( [ &parking2 ]() { parking2.remove_outcoming_car( "park1_exits.txt" , 2 ); } );
 	
 	parking1_access_manager.join();
 	parking1_exit_manager.join();
+	parking2_access_manager.join();
+	parking2_exit_manager.join();
 /*
 	cout << "\n\nHERE YOU HAVE CARS STILL PARKED:" << endl;
 	list <Access> parked_cars=parking1.get_parked_cars();
